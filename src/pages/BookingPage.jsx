@@ -273,7 +273,7 @@ function BookingPage() {
             {error && <p className="booking-error" role="alert">{error}</p>}
             <button className="booking-action" type="submit" form="passenger-form" disabled={submitting || loading || !user}>{submitting ? 'Creating booking…' : 'Continue to payment'}</button>
           </>}
-          {confirmed && <><Link to={`/my-bookings/${booking?.id}`} className="booking-action">View this booking</Link><Link to="/my-bookings" className="booking-back-step">My bookings</Link><Link to="/" className="booking-back-step">Return home</Link></>}
+          {confirmed && <><Link to={`/my-bookings/${booking?.id}`} className="booking-action">View ticket &amp; save as PDF</Link><Link to="/my-bookings" className="booking-back-step">My bookings</Link><Link to="/" className="booking-back-step">Return home</Link></>}
         </aside>
       </div>}
     </section>
