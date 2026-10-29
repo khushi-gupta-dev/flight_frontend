@@ -71,7 +71,10 @@ function MyBookingsPage() {
   useEffect(() => { load() }, [load])
 
   const cancel = async () => {
-    if (!detail || !window.confirm('Request cancellation for this booking?')) return
+    const confirmation = canRetryRefund
+      ? 'Retry the failed refund request?'
+      : 'Cancel this booking and request a refund if payment was captured?'
+    if (!detail || !window.confirm(confirmation)) return
     setWorking(true)
     setError('')
     try {
@@ -93,6 +96,7 @@ function MyBookingsPage() {
   ]
   const routeFor = (flightData) => `${flightData?.departureAirport?.code || flightData?.departureAirportId || '—'} → ${flightData?.arrivalAirport?.code || flightData?.arrivalAirportId || '—'}`
   const canCancel = detail && detail.status !== 'cancelled' && flight && Number.isFinite(Date.parse(flight.departureTime)) && Date.parse(flight.departureTime) > Date.now()
+  const canRetryRefund = detail?.status === 'cancelled' && detail.refund?.status === 'failed'
 
   return <main className="my-bookings-page">
     <header className="my-bookings-header"><Link className="my-bookings-brand" to="/"><span><Plane size={17} /></span>Sky<span>Link</span></Link><Link to="/" className="my-bookings-home">Back to home <ArrowRight size={15} /></Link></header>
@@ -109,7 +113,7 @@ function MyBookingsPage() {
             <div className="my-booking-route"><div><small>FROM</small><strong>{flight?.departureAirport?.code || flight?.departureAirportId || '—'}</strong><span>{flight?.departureAirport?.City?.name || 'Departure'}</span></div><span className="my-booking-route-line"><i /></span><div><small>TO</small><strong>{flight?.arrivalAirport?.code || flight?.arrivalAirportId || '—'}</strong><span>{flight?.arrivalAirport?.City?.name || 'Arrival'}</span></div></div>
             <div className="my-booking-meta"><span><CalendarDays size={16} /> Departure <strong>{formatDate(flight?.departureTime, true)}</strong></span><span><Clock3 size={16} /> Arrival <strong>{formatDate(flight?.arrivalTime, true)}</strong></span><span><Users size={16} /> Travellers <strong>{detail.noOfSeats}</strong></span></div>
           </article>
-          <aside className="my-booking-card my-booking-total"><p className="my-bookings-kicker">BOOKING SUMMARY</p><div><span>Status</span><strong className={`my-booking-status status-${detail.status}`}>{detail.status}</strong></div><div><span>Travellers</span><strong>{detail.noOfSeats}</strong></div><div className="my-booking-total-amount"><span>Total</span><strong>₹{Number(detail.totalCost).toLocaleString('en-IN')}</strong></div>{canCancel && <button type="button" className="my-booking-cancel" onClick={cancel} disabled={working}>{working ? 'Cancelling…' : <><XCircle size={15} /> Request cancellation</>}</button>}</aside>
+          <aside className="my-booking-card my-booking-total"><p className="my-bookings-kicker">BOOKING SUMMARY</p><div><span>Status</span><strong className={`my-booking-status status-${detail.status}`}>{detail.status}</strong></div><div><span>Travellers</span><strong>{detail.noOfSeats}</strong></div><div className="my-booking-total-amount"><span>Total</span><strong>₹{Number(detail.totalCost).toLocaleString('en-IN')}</strong></div>{detail.refund && <div><span>Refund</span><strong>{detail.refund.status} · ₹{(Number(detail.refund.amount) / 100).toLocaleString('en-IN')}</strong></div>}{(canCancel || canRetryRefund) && <button type="button" className="my-booking-cancel" onClick={cancel} disabled={working}>{working ? 'Processing…' : canRetryRefund ? <><RotateCcw size={15} /> Retry refund</> : <><XCircle size={15} /> Request cancellation</>}</button>}</aside>
         </div>
         <section className="my-booking-card my-booking-passengers"><p className="my-bookings-kicker">TRAVELLER INFORMATION</p><h2>Passengers</h2>{(detail.passengerDetails || []).map((passenger, index) => <article key={`${index}-${passenger.email}`}><span>{index + 1}</span><div><strong>{passenger.fullName}</strong><small>{passenger.email} · {passenger.phone}</small></div></article>)}{!detail.passengerDetails?.length && <p>Passenger details are not available for this booking.</p>}</section>
       </> : !id && bookings.length === 0 ? <div className="my-bookings-empty"><span><Plane size={22} /></span><h2>No bookings yet</h2><p>Your confirmed trips will appear here after you book a flight.</p><Link to="/#flight-search" className="my-booking-primary">Find a flight <ArrowRight size={15} /></Link></div> : !id && groups.map((group) => <section className="my-booking-group" key={group.title}><div className="my-booking-group-head"><h2>{group.title}</h2><span>{group.entries.length}</span></div>{group.entries.length ? <div className="my-booking-list">{group.entries.map((booking) => <article className="my-booking-card my-booking-list-item" key={booking.id}><span className="my-booking-plane"><Plane size={18} /></span><div className="my-booking-list-main"><div><strong>{routeFor(booking.flight)}</strong><span className={`my-booking-status status-${booking.status}`}>{booking.status}</span></div><small>{booking.flight?.flightNumber || `Booking #${booking.id}`} · {formatDate(booking.flight?.departureTime, true)}</small></div><div className="my-booking-list-price"><strong>₹{Number(booking.totalCost).toLocaleString('en-IN')}</strong><small>{booking.noOfSeats} {booking.noOfSeats === 1 ? 'traveller' : 'travellers'}</small></div><Link to={`/my-bookings/${booking.id}`} aria-label={`View booking ${booking.id}`}><ArrowRight size={17} /></Link></article>)}</div> : <p className="my-booking-group-empty">No {group.title.toLowerCase()} to show.</p>}</section>)}
