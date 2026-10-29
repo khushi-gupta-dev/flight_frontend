@@ -13,3 +13,5 @@
   .my-booking-card{break-inside:avoid;box-shadow:none!important;border-color:#ddd!important}
   .my-booking-passengers{margin-top:12px}
 }
+.status-cancellation_requested{background:#fff5e8;color:#a97016}
+.my-booking-cancellation-note{padding:10px 11px;border-radius:8px;background:#fff8eb;color:#8f681d;font-size:10px;line-height:1.5}
