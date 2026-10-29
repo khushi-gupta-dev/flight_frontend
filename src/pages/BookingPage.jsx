@@ -5,6 +5,24 @@ import { getCurrentUser } from '../services/auth'
 import './BookingPage.css'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
+let razorpayScriptPromise
+
+function loadRazorpayCheckout() {
+  if (window.Razorpay) return Promise.resolve(true)
+  if (!razorpayScriptPromise) {
+    razorpayScriptPromise = new Promise((resolve) => {
+      const script = document.createElement('script')
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+      script.onload = () => resolve(true)
+      script.onerror = () => {
+        razorpayScriptPromise = null
+        resolve(false)
+      }
+      document.body.appendChild(script)
+    })
+  }
+  return razorpayScriptPromise
+}
 
 function bookingRequestKey(fingerprint) {
   const storageKey = `booking-create:${fingerprint.flightId}`
@@ -129,21 +147,65 @@ function BookingPage() {
     }
   }
 
-  const completeDemoPayment = async () => {
+  const startRazorpayPayment = async () => {
     setError('')
     setSubmitting(true)
     try {
-      const idempotencyKey = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`
-      await readResponse(await fetch(`${API_BASE_URL}/bookingService/api/v1/bookings/payments`, {
+      const checkoutAvailable = await loadRazorpayCheckout()
+      if (!checkoutAvailable) throw new Error('Could not load Razorpay Checkout. Check your connection and try again.')
+
+      const order = await readResponse(await fetch(`${API_BASE_URL}/bookingService/api/v1/bookings/payments/order`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-idempotency-key': idempotencyKey, 'x-access-token': authToken() },
-        body: JSON.stringify({ bookingId: booking.id, userId: user.id, totalCost: booking.totalCost }),
+        headers: {
+          'Content-Type': 'application/json',
+          'x-idempotency-key': globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+          'x-access-token': authToken(),
+        },
+        body: JSON.stringify({ bookingId: booking.id }),
       }))
-      setConfirmed(true)
-      setStep('confirmation')
+
+      const checkout = new window.Razorpay({
+        key: order.keyId,
+        amount: order.amount,
+        currency: order.currency,
+        name: 'SkyLink',
+        description: `Flight booking #${booking.id}`,
+        order_id: order.razorpayOrderId,
+        prefill: {
+          name: passengerDetails[0]?.fullName || '',
+          email: passengerDetails[0]?.email || '',
+          contact: passengerDetails[0]?.phone || '',
+        },
+        theme: { color: '#c63755' },
+        modal: { ondismiss: () => setSubmitting(false) },
+        handler: async (payment) => {
+          try {
+            const result = await readResponse(await fetch(`${API_BASE_URL}/bookingService/api/v1/bookings/${booking.id}/payments/verify`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'x-access-token': authToken() },
+              body: JSON.stringify(payment),
+            }))
+            if (result.status !== 'captured') {
+              throw new Error(result.status === 'late_capture'
+                ? 'Payment was received after the booking hold expired. Please contact support for refund reconciliation.'
+                : 'Payment has not been captured yet. Please check your booking status before retrying.')
+            }
+            setConfirmed(true)
+            setStep('confirmation')
+          } catch (requestError) {
+            setError(requestError.message || 'Could not verify the payment. Check your booking before trying again.')
+          } finally {
+            setSubmitting(false)
+          }
+        },
+      })
+      checkout.on('payment.failed', (event) => {
+        setError(event.error?.description || 'Payment failed. You can try again.')
+        setSubmitting(false)
+      })
+      checkout.open()
     } catch (requestError) {
-      setError(requestError.message || 'Could not complete the demo payment. Please try again.')
-    } finally {
+      setError(requestError.message || 'Could not start payment. Please try again.')
       setSubmitting(false)
     }
   }
@@ -162,11 +224,11 @@ function BookingPage() {
     <section className="booking-content">
       <Link to="/#flight-search" className="booking-back"><ArrowLeft size={15} /> Back to search</Link>
       <p className="booking-kicker">YOUR JOURNEY, ONE STEP CLOSER</p>
-      <h1>{confirmed ? 'Booking confirmed' : step === 'payment' ? 'Demo payment' : 'Review your flight'}</h1>
-      <p className="booking-subtitle">{confirmed ? 'Your booking has been confirmed.' : step === 'payment' ? 'Review the server-calculated total and complete the demo payment.' : 'Check your trip and passenger details before continuing.'}</p>
+      <h1>{confirmed ? 'Booking confirmed' : step === 'payment' ? 'Complete your payment' : 'Review your flight'}</h1>
+      <p className="booking-subtitle">{confirmed ? 'Your booking has been confirmed.' : step === 'payment' ? 'Pay securely with Razorpay to confirm your booking.' : 'Check your trip and passenger details before continuing.'}</p>
       <ol className="booking-steps" aria-label="Booking progress">
         <li className={step === 'details' ? 'active' : 'complete'}><span>{step === 'details' ? '1' : <CheckCircle2 size={15} />}</span>Passenger details</li>
-        <li className={step === 'payment' ? 'active' : step === 'confirmation' ? 'complete' : ''}><span>{step === 'confirmation' ? <CheckCircle2 size={15} /> : '2'}</span>Demo payment</li>
+        <li className={step === 'payment' ? 'active' : step === 'confirmation' ? 'complete' : ''}><span>{step === 'confirmation' ? <CheckCircle2 size={15} /> : '2'}</span>Payment</li>
         <li className={step === 'confirmation' ? 'active' : ''}><span>3</span>Confirmation</li>
       </ol>
 
@@ -194,14 +256,14 @@ function BookingPage() {
         </div>
 
         <aside className="booking-panel booking-summary">
-          {confirmed ? <div className="booking-confirmed"><CheckCircle2 size={38} /><h2>Booking confirmed</h2><p>Reference <strong>#{booking?.id}</strong></p><span className="booking-status"><BadgeCheck size={14} /> BOOKED</span><div className="booking-confirmed-total"><span>Paid (demo)</span><strong>₹{Number(booking?.totalCost).toLocaleString('en-IN')}</strong></div></div> : step === 'payment' ? <>
-            <p className="booking-summary-label">DEMO PAYMENT</p>
-            <div className="booking-demo-banner"><CreditCard size={18} /><div><strong>Demo checkout</strong><span>No real payment details or charge</span></div><span className="booking-demo-tag">DEMO</span></div>
+          {confirmed ? <div className="booking-confirmed"><CheckCircle2 size={38} /><h2>Booking confirmed</h2><p>Reference <strong>#{booking?.id}</strong></p><span className="booking-status"><BadgeCheck size={14} /> BOOKED</span><div className="booking-confirmed-total"><span>Paid</span><strong>₹{Number(booking?.totalCost).toLocaleString('en-IN')}</strong></div></div> : step === 'payment' ? <>
+            <p className="booking-summary-label">SECURE PAYMENT</p>
+            <div className="booking-demo-banner"><CreditCard size={18} /><div><strong>Razorpay Checkout</strong><span>Payment is verified by the booking service</span></div></div>
             <div className="booking-total-row"><span>{travellers} {travellers === 1 ? 'traveller' : 'travellers'}</span><span>₹{Number(booking?.totalCost).toLocaleString('en-IN')}</span></div>
             <div className="booking-total-row booking-total"><strong>Total due</strong><strong>₹{Number(booking?.totalCost).toLocaleString('en-IN')}</strong></div>
-            <p className="booking-payment-note"><Clock3 size={14} /> The booking service currently simulates a successful payment.</p>
+            <p className="booking-payment-note"><Clock3 size={14} /> Your final amount is calculated by the booking service.</p>
             {error && <p className="booking-error" role="alert">{error}</p>}
-            <button className="booking-action" type="button" onClick={completeDemoPayment} disabled={submitting}>{submitting ? 'Processing demo payment…' : 'Simulate successful payment'}</button>
+            <button className="booking-action" type="button" onClick={startRazorpayPayment} disabled={submitting}>{submitting ? 'Opening secure checkout…' : 'Pay securely with Razorpay'}</button>
             <button className="booking-back-step" type="button" onClick={() => { setError(''); setStep('details') }} disabled={submitting}>Back to passenger details</button>
           </> : <>
             <p className="booking-summary-label">FARE ESTIMATE</p>
@@ -209,7 +271,7 @@ function BookingPage() {
             <div className="booking-total-row booking-total"><strong>Estimated total</strong><strong>₹{(Number(flight.price) * travellers).toLocaleString('en-IN')}</strong></div>
             <p className="booking-payment-note"><Clock3 size={14} /> Final total is calculated by the booking service.</p>
             {error && <p className="booking-error" role="alert">{error}</p>}
-            <button className="booking-action" type="submit" form="passenger-form" disabled={submitting || loading || !user}>{submitting ? 'Creating booking…' : 'Continue to demo payment'}</button>
+            <button className="booking-action" type="submit" form="passenger-form" disabled={submitting || loading || !user}>{submitting ? 'Creating booking…' : 'Continue to payment'}</button>
           </>}
           {confirmed && <><Link to={`/my-bookings/${booking?.id}`} className="booking-action">View this booking</Link><Link to="/my-bookings" className="booking-back-step">My bookings</Link><Link to="/" className="booking-back-step">Return home</Link></>}
         </aside>
