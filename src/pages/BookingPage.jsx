@@ -6,6 +6,20 @@ import './BookingPage.css'
 
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
 
+function bookingRequestKey(fingerprint) {
+  const storageKey = `booking-create:${fingerprint.flightId}`
+  const signature = JSON.stringify(fingerprint)
+  try {
+    const previous = JSON.parse(sessionStorage.getItem(storageKey) || 'null')
+    if (previous?.signature === signature && previous.key) return { key: previous.key, storageKey }
+    const key = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`
+    sessionStorage.setItem(storageKey, JSON.stringify({ signature, key }))
+    return { key, storageKey }
+  } catch {
+    return { key: globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`, storageKey: null }
+  }
+}
+
 async function readResponse(response) {
   const payload = await response.json().catch(() => ({}))
   if (!response.ok || payload.success === false) {
@@ -95,11 +109,14 @@ function BookingPage() {
     setError('')
     setSubmitting(true)
     try {
+      const requestFingerprint = { flightId: Number(flightId), userId: user.id, noOfSeats: travellers, passengerDetails }
+      const requestKey = bookingRequestKey(requestFingerprint)
       const currentBooking = await readResponse(await fetch(`${API_BASE_URL}/bookingService/api/v1/bookings`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-access-token': authToken() },
+        headers: { 'Content-Type': 'application/json', 'x-idempotency-key': requestKey.key, 'x-access-token': authToken() },
         body: JSON.stringify({ flightId: Number(flightId), userId: user.id, noOfSeats: travellers, passengerDetails }),
       }))
+      if (requestKey.storageKey) sessionStorage.removeItem(requestKey.storageKey)
       setBooking(currentBooking)
       setStep('payment')
       const nextParams = new URLSearchParams(location.search)

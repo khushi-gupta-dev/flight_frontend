@@ -13,7 +13,7 @@ React 19/Vite client. The API gateway is the frontend's backend entry point. In 
 | `/profile` | Signed-in account profile |
 | `/admin` | Admin catalogue management and booking review |
 
-Signed-out flight selection is kept through login/signup, then restored at the booking page. Booking uses the demo payment API; it does not collect card data or charge money. Customers can cancel eligible bookings before departure; the current cancellation flow has no refund integration.
+Signed-out flight selection is kept through login/signup, then restored at the booking page. Booking creation sends a stable idempotency key and retains it for retries of the same passenger submission. Booking uses the demo payment API; it does not collect card data or charge money. Customers can cancel eligible bookings before departure; the current cancellation flow has no refund integration.
 
 ## Run and verify
 
