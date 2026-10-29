@@ -13,7 +13,7 @@ React 19/Vite client. The API gateway is the frontend's backend entry point. In 
 | `/profile` | Signed-in account profile |
 | `/admin` | Admin catalogue management and booking review |
 
-Signed-out flight selection is kept through login/signup, then restored at the booking page. Booking creation sends a stable idempotency key and retains it for retries of the same passenger submission. Checkout uses a server-created Razorpay order and confirms payment through the Booking Service verification endpoint. The demo payment endpoint remains available but is not used by this page. Customers can cancel eligible bookings before departure; the current cancellation flow has no refund integration.
+Signed-out flight selection is kept through login/signup, then restored at the booking page. Booking creation sends a stable idempotency key and retains it for retries of the same passenger submission. Checkout uses a server-created Razorpay order and confirms payment through the Booking Service verification endpoint. The demo payment endpoint has been removed. Customers can cancel eligible bookings before departure; the current cancellation flow has no refund integration.
 
 ## Run and verify
 
