@@ -61,6 +61,7 @@ export default function RecoveryPage() {
 
 function RecoveryCard({ recoveryCase, working, onApprove, onDecline, onRetry }) {
   const alternatives = recoveryCase.alternatives || []
+  const audit = recoveryCase.audit || []
   return <article className="recovery-case">
     <div className="recovery-case-head"><div className="recovery-case-icon"><AlertTriangle size={18} /></div><div><p className="recovery-kicker">RECOVERY CASE #{recoveryCase.id}</p><h2>Choose your next flight</h2></div><span className={`recovery-status recovery-${recoveryCase.status}`}>{recoveryCase.status.replaceAll('_', ' ')}</span></div>
     <div className="recovery-case-note"><Clock3 size={15} /><span>Your original booking remains unchanged while you decide.</span></div>
@@ -69,5 +70,6 @@ function RecoveryCard({ recoveryCase, working, onApprove, onDecline, onRetry }) 
     {recoveryCase.status === 'rebooking' && <p className="recovery-progress"><span className="recovery-loader small" /> Your choice is being secured.</p>}
     {recoveryCase.status === 'failed' && <div className="recovery-failure"><strong>Recovery paused safely.</strong><span>{recoveryCase.rebookingAttempt?.errorMessage || 'The last step needs another attempt.'}</span><button className="recovery-retry" disabled={working} onClick={onRetry}><RefreshCw size={13} /> Retry rebooking</button></div>}
     {recoveryCase.status === 'completed' && <p className="recovery-progress recovery-complete"><Check size={15} /> Rebooking completed. Your booking is updated.</p>}
+    {audit.length > 0 && <div className="recovery-timeline"><p className="recovery-timeline-title">Recovery timeline</p>{audit.map((event) => <div className="recovery-timeline-item" key={event.id}><span className="recovery-timeline-dot" /><div><strong>{event.eventType.replaceAll('_', ' ')}</strong><small>{formatDate(event.createdAt)}</small></div></div>)}</div>}
   </article>
 }

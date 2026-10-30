@@ -37,7 +37,8 @@ status. Apply the Flights Service disruption migration and configure
 
 The recovery center protects the original booking while the customer reviews
 ranked alternatives. Customers can approve one alternative or decline all
-options; approval is idempotent and only starts the rebooking state for the
-next saga step.
+options; approval is idempotent and starts the rebooking saga. Each case also
+shows the persisted recovery audit timeline, rebooking progress, and safe
+retry state.
 
 Login, booking, and admin operations require the API Gateway and relevant backend services. Password recovery screens are not routed because matching backend APIs are not implemented.
