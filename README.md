@@ -13,7 +13,7 @@ React 19/Vite client. The API gateway is the frontend's backend entry point. In 
 | `/booking/:flightId` | Passenger details, seat hold, Razorpay Checkout, confirmation |
 | `/my-bookings`, `/my-bookings/:id` | Customer booking list and detail/cancellation |
 | `/profile` | Signed-in account profile |
-| `/admin` | Admin catalogue management and booking review |
+| `/admin` | Admin catalogue management, booking review, and disruption simulator |
 
 Signed-out flight selection is kept through login/signup, then restored at the booking page. Booking creation sends a stable idempotency key and retains it for retries of the same passenger submission. Checkout uses a server-created Razorpay order and confirms payment through the Booking Service verification endpoint. The demo payment endpoint has been removed. Customers can request cancellation before departure; the booking shows `cancellation requested` while the 85% refund (15% cancellation charge) is pending and `cancelled` after the refund is accepted. Confirmed booking details have a print-friendly ticket; use the browser print dialog and choose Save as PDF.
 
@@ -27,5 +27,11 @@ npm run dev
 npm run lint
 npm run build
 ```
+
+The admin workspace includes a Disruptions tab for Phase 1. It creates an
+idempotent disruption event, publishes it through the Flights Service to the
+`skylink.events` RabbitMQ exchange, and displays published or retryable event
+status. Apply the Flights Service disruption migration and configure
+`RABBITMQ_URL` before using the simulator.
 
 Login, booking, and admin operations require the API Gateway and relevant backend services. Password recovery screens are not routed because matching backend APIs are not implemented.

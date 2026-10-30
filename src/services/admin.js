@@ -75,3 +75,18 @@ export const createAirplane = (token, airplane) => adminRequest('/airplanes', to
   method: 'POST',
   body: JSON.stringify(airplane),
 })
+
+export const getDisruptions = (token) => adminRequest('/disruptions', token)
+
+export const createDisruption = (token, disruption) => adminRequest('/disruptions', token, {
+  method: 'POST',
+  body: JSON.stringify(disruption),
+})
+
+export const retryDisruption = (token, id) => adminRequest(`/disruptions/${id}/retry`, token, {
+  method: 'POST',
+})
+
+export const cancelDisruption = (token, id) => adminRequest(`/disruptions/${id}/cancel`, token, {
+  method: 'POST',
+})

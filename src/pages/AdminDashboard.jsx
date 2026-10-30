@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { ArrowUpRight, Building2, Check, ChevronRight, Clock3, ClipboardList, LayoutDashboard, LogOut, MapPin, Menu, Plane, Plus, Search, ShieldCheck, Users, UserRound, X } from 'lucide-react'
+import { AlertTriangle, ArrowUpRight, Building2, Check, ChevronRight, Clock3, ClipboardList, LayoutDashboard, LogOut, MapPin, Menu, Plane, Plus, Search, ShieldCheck, Users, UserRound, X } from 'lucide-react'
 import { getCurrentUser } from '../services/auth'
-import { createAirplane, createAirport, createCity, createFlight, getAdminBookings, getAdminResources } from '../services/admin'
+import { cancelDisruption, createAirplane, createAirport, createCity, createDisruption, createFlight, getAdminBookings, getAdminResources, getDisruptions, retryDisruption } from '../services/admin'
 import './AdminDashboard.css'
 import './AdminBookings.css'
 import './AdminProfileLink.css'
+import './Disruptions.css'
 
 const readToken = () => sessionStorage.getItem('authToken') || localStorage.getItem('authToken')
 
@@ -63,6 +64,9 @@ function AdminWorkspace({ profile, token, onLogout }) {
   const [bookings, setBookings] = useState([])
   const [bookingsLoading, setBookingsLoading] = useState(false)
   const [bookingsError, setBookingsError] = useState('')
+  const [disruptions, setDisruptions] = useState([])
+  const [disruptionsLoading, setDisruptionsLoading] = useState(false)
+  const [disruptionsError, setDisruptionsError] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [dialog, setDialog] = useState('')
@@ -100,10 +104,26 @@ function AdminWorkspace({ profile, token, onLogout }) {
 
   useEffect(() => { if (activeTab === 'bookings' && !loading) refreshBookings() }, [activeTab, token, resources.flights, loading]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const refreshDisruptions = async () => {
+    setDisruptionsError('')
+    setDisruptionsLoading(true)
+    try {
+      const data = await getDisruptions(token)
+      setDisruptions(Array.isArray(data) ? data : [])
+    } catch (error) {
+      setDisruptionsError(error.message || 'Could not load disruptions.')
+    } finally {
+      setDisruptionsLoading(false)
+    }
+  }
+
+  useEffect(() => { if (activeTab === 'disruptions') refreshDisruptions() }, [activeTab, token]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const availableSeats = useMemo(() => resources.flights.reduce((sum, flight) => sum + Number(flight.totalSeats || 0), 0), [resources.flights])
   const navItems = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'bookings', label: 'Bookings', icon: ClipboardList },
+    { id: 'disruptions', label: 'Disruptions', icon: AlertTriangle },
     { id: 'flights', label: 'Flights', icon: Plane },
     { id: 'airports', label: 'Airports', icon: MapPin },
     { id: 'fleet', label: 'Fleet', icon: Building2 },
@@ -148,6 +168,7 @@ function AdminWorkspace({ profile, token, onLogout }) {
             {activeTab === 'airports' && <AirportsPanel airports={resources.airports} onCreate={openCreate} />}
             {activeTab === 'fleet' && <FleetPanel airplanes={resources.airplanes} onCreate={openCreate} />}
             {activeTab === 'bookings' && <BookingsPanel bookings={bookings} loading={bookingsLoading} error={bookingsError} onRefresh={refreshBookings} />}
+            {activeTab === 'disruptions' && <DisruptionsPanel flights={resources.flights} disruptions={disruptions} loading={disruptionsLoading} error={disruptionsError} token={token} onRefresh={refreshDisruptions} onCreated={handleCreated} />}
           </>}
         </div>
       </section>
@@ -185,6 +206,60 @@ function FlightsPanel({ flights, onCreate }) {
 function FlightTable({ flights, compact = false }) {
   if (!flights.length) return <div className="admin-empty"><span><Plane size={21} /></span><strong>No flights yet</strong><p>Create a flight to see schedules and inventory here.</p></div>
   return <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Flight</th><th>Route</th><th>Departure</th><th>Available seats</th><th>Status</th></tr></thead><tbody>{flights.map((flight) => <tr key={flight.id}><td><span className="table-flight-icon"><Plane size={14} /></span><strong>{flight.flightNumber}</strong></td><td>{flight.departureAirport?.code || flight.departureAirportId}<span className="route-dash">→</span>{flight.arrivalAirport?.code || flight.arrivalAirportId}</td><td>{formatDate(flight.departureTime)}</td><td>{flight.totalSeats ?? '—'}</td><td><span className={`admin-status ${Number(flight.totalSeats) > 0 ? 'available' : 'full'}`}><i />{Number(flight.totalSeats) > 0 ? 'Available' : 'Full'}</span></td></tr>)}</tbody></table>{compact && flights.length < 5 && <p className="admin-table-foot"><Clock3 size={13} /> Showing the next {flights.length} scheduled flight{flights.length === 1 ? '' : 's'}</p>}</div>
+}
+
+function DisruptionsPanel({ flights, disruptions, loading, error, token, onRefresh, onCreated }) {
+  const [form, setForm] = useState({ flightId: '', type: 'cancellation', severity: 'high', reason: '', effectiveAt: '', delayMinutes: '' })
+  const [submitting, setSubmitting] = useState(false)
+  const [formError, setFormError] = useState('')
+
+  const submit = async (event) => {
+    event.preventDefault()
+    setFormError('')
+    setSubmitting(true)
+    try {
+      await createDisruption(token, { ...form, flightId: Number(form.flightId), idempotencyKey: `admin-disruption-${crypto.randomUUID()}` })
+      setForm({ flightId: '', type: 'cancellation', severity: 'high', reason: '', effectiveAt: '', delayMinutes: '' })
+      onCreated('Disruption')
+      await onRefresh()
+    } catch (submitError) {
+      setFormError(submitError.message)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const action = async (operation, id) => {
+    try {
+      await operation(token, id)
+      await onRefresh()
+    } catch (actionError) {
+      setFormError(actionError.message)
+    }
+  }
+
+  return <div className="disruption-workspace">
+    <section className="admin-panel disruption-hero">
+      <div><span className="disruption-icon"><AlertTriangle size={20} /></span><div><p className="admin-eyebrow">PHASE 1 · EVENT SIMULATOR</p><h2>Test disruption recovery safely</h2><p>Create a realistic operational event. The system persists it and publishes a durable event for the recovery workflow.</p></div></div>
+      <span className="disruption-pill"><i /> RabbitMQ event ready</span>
+    </section>
+    <div className="disruption-grid">
+      <section className="admin-panel disruption-form-panel"><div className="admin-panel-head"><div><h2>Simulate disruption</h2><p>Only future flights should be selected.</p></div></div>
+        <form className="admin-form disruption-form" onSubmit={submit}>
+          <label>Flight<select value={form.flightId} onChange={(event) => setForm({ ...form, flightId: event.target.value })} required><option value="" disabled>Select a scheduled flight</option>{flights.filter((flight) => new Date(flight.departureTime) > new Date()).map((flight) => <option key={flight.id} value={flight.id}>{flight.flightNumber} · {flight.departureAirportId} → {flight.arrivalAirportId}</option>)}</select></label>
+          <div className="admin-form-row"><label>Event type<select value={form.type} onChange={(event) => setForm({ ...form, type: event.target.value })}><option value="cancellation">Cancellation</option><option value="delay">Delay</option><option value="overbooking">Overbooking</option><option value="airport_closure">Airport closure</option></select></label><label>Severity<select value={form.severity} onChange={(event) => setForm({ ...form, severity: event.target.value })}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option></select></label></div>
+          {form.type === 'delay' && <label>Delay duration (minutes)<input type="number" min="1" value={form.delayMinutes} onChange={(event) => setForm({ ...form, delayMinutes: event.target.value })} required /></label>}
+          <label>Effective time<input type="datetime-local" value={form.effectiveAt} onChange={(event) => setForm({ ...form, effectiveAt: event.target.value })} required /></label>
+          <label>Reason<textarea rows="3" maxLength="500" value={form.reason} onChange={(event) => setForm({ ...form, reason: event.target.value })} placeholder="Aircraft unavailable, severe weather..." required /></label>
+          {formError && <p className="admin-form-error" role="alert">{formError}</p>}
+          <button className="admin-create-button" disabled={submitting || !flights.length}>{submitting ? 'Publishing event…' : <><AlertTriangle size={16} /> Publish disruption</>}</button>
+        </form>
+      </section>
+      <section className="admin-panel disruption-list-panel"><div className="admin-panel-head"><div><h2>Event activity <span className="admin-count">{disruptions.length}</span></h2><p>Published and retryable operational events</p></div><button onClick={onRefresh}>Refresh</button></div>
+        {loading ? <div className="admin-loading"><span className="admin-loader" />Loading events…</div> : error ? <div className="admin-error"><span>{error}</span><button onClick={onRefresh}>Retry</button></div> : !disruptions.length ? <div className="admin-empty disruption-empty"><span><AlertTriangle size={21} /></span><strong>No disruptions simulated</strong><p>Publish an event to start the recovery workflow.</p></div> : <div className="disruption-events">{disruptions.map((disruption) => <article className="disruption-event" key={disruption.id}><div className={`disruption-status ${disruption.status}`}><i />{disruption.status}</div><strong>{disruption.flight?.flightNumber || `Flight ${disruption.flightId}`}</strong><p>{disruption.type.replaceAll('_', ' ')} · {disruption.reason}</p><small>{formatDate(disruption.createdAt)} · {disruption.severity}</small>{disruption.status === 'failed' && <button className="disruption-action" onClick={() => action(retryDisruption, disruption.id)}>Retry publication</button>}{disruption.status === 'created' && <button className="disruption-action" onClick={() => action(cancelDisruption, disruption.id)}>Cancel event</button>}</article>)}</div>}
+      </section>
+    </div>
+  </div>
 }
 
 function BookingsPanel({ bookings, loading, error, onRefresh }) {
