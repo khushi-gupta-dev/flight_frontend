@@ -29,3 +29,7 @@ export const declineRecovery = (token, id) => request(`/${id}/decline`, token, {
   method: 'POST',
   headers: { 'x-idempotency-key': `recovery-decline-${id}-${crypto.randomUUID()}` },
 })
+
+export const retryRecovery = (token, id) => request(`/${id}/retry`, token, {
+  method: 'POST',
+})
