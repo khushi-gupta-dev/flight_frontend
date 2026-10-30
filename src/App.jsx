@@ -11,6 +11,7 @@ import ProfilePage from './pages/ProfilePage'
 import ForgotPasswordPage from './pages/ForgotPasswordPage'
 import OTPVerificationPage from './pages/OTPVerificationPage'
 import ResetPasswordPage from './pages/ResetPasswordPage'
+import RecoveryPage from './pages/RecoveryPage'
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
         <Route path="/booking/:flightId" element={<BookingPage />} />
         <Route path="/my-bookings" element={<MyBookingsPage />} />
         <Route path="/my-bookings/:id" element={<MyBookingsPage />} />
+        <Route path="/recovery" element={<RecoveryPage />} />
         <Route path="/profile" element={<ProfilePage />} />
         {/* Password recovery: backend not yet implemented — pages show a notice or mock flow */}
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />

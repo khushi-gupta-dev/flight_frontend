@@ -12,6 +12,7 @@ React 19/Vite client. The API gateway is the frontend's backend entry point. In 
 | `/login`, `/signup` | Customer/admin sign-in and customer registration |
 | `/booking/:flightId` | Passenger details, seat hold, Razorpay Checkout, confirmation |
 | `/my-bookings`, `/my-bookings/:id` | Customer booking list and detail/cancellation |
+| `/recovery` | Customer disruption recovery center and alternative-flight approval |
 | `/profile` | Signed-in account profile |
 | `/admin` | Admin catalogue management, booking review, and disruption simulator |
 
@@ -33,5 +34,10 @@ idempotent disruption event, publishes it through the Flights Service to the
 `skylink.events` RabbitMQ exchange, and displays published or retryable event
 status. Apply the Flights Service disruption migration and configure
 `RABBITMQ_URL` before using the simulator.
+
+The recovery center protects the original booking while the customer reviews
+ranked alternatives. Customers can approve one alternative or decline all
+options; approval is idempotent and only starts the rebooking state for the
+next saga step.
 
 Login, booking, and admin operations require the API Gateway and relevant backend services. Password recovery screens are not routed because matching backend APIs are not implemented.
