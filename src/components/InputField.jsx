@@ -2,10 +2,24 @@ import { useState } from 'react'
 
 /**
  * InputField with animated focus border glow and label transition.
+ *
+ * @param {string}   label        - Visible label text above the field.
+ * @param {string}   id           - HTML id (also used for the label's htmlFor).
+ * @param {string}   [name]       - Optional name attribute for form submission.
+ * @param {string}   [type]       - Input type (default: 'text').
+ * @param {string}   [placeholder]
+ * @param {string}   [value]      - Controlled value.
+ * @param {Function} [onChange]   - Change handler.
+ * @param {ReactNode}[rightIcon]  - Optional icon rendered inside the right side.
+ * @param {string}   [autoComplete]
+ * @param {string}   [animDelay]  - CSS animation-delay value (default: '0ms').
+ * @param {boolean}  [required]   - Whether the field is required (default: true).
+ * @param {number}   [maxLength]  - Optional max character length.
  */
 const InputField = ({
   label,
   id,
+  name,
   type = 'text',
   placeholder,
   value,
@@ -13,6 +27,8 @@ const InputField = ({
   rightIcon,
   autoComplete,
   animDelay = '0ms',
+  required = true,
+  maxLength,
 }) => {
   const [focused, setFocused] = useState(false)
 
@@ -32,12 +48,14 @@ const InputField = ({
       <div className="relative">
         <input
           id={id}
+          name={name}
           type={type}
           placeholder={placeholder}
           value={value}
           onChange={onChange}
           autoComplete={autoComplete}
-          required
+          required={required}
+          maxLength={maxLength}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           className="input-primary pr-10"

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, BadgeCheck, CalendarDays, CheckCircle2, Clock3, CreditCard, Plane, Users } from 'lucide-react'
 import { getCurrentUser } from '../services/auth'
@@ -67,12 +67,15 @@ function BookingPage() {
   const authToken = () => sessionStorage.getItem('authToken') || localStorage.getItem('authToken') || ''
   const date = location.state?.bookingIntent?.date ?? searchParams.get('date') ?? ''
   const bookingIntent = { flightId: Number(flightId), flight, date, travellers }
+  // Keep a stable ref so the mount-only useEffect can redirect with the latest intent.
+  const bookingIntentRef = useRef(bookingIntent)
+  bookingIntentRef.current = bookingIntent
 
   useEffect(() => {
     let active = true
     const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken')
     if (!token) {
-      navigate('/login', { replace: true, state: { bookingIntent } })
+      navigate('/login', { replace: true, state: { bookingIntent: bookingIntentRef.current } })
       return () => { active = false }
     }
 
@@ -110,7 +113,7 @@ function BookingPage() {
       if (!profileLoaded && [400, 401, 403].includes(requestError.status)) {
         sessionStorage.removeItem('authToken')
         localStorage.removeItem('authToken')
-        navigate('/login', { replace: true, state: { bookingIntent } })
+        navigate('/login', { replace: true, state: { bookingIntent: bookingIntentRef.current } })
       } else {
         setError(requestError.message || 'Could not load your account or this flight. Please try again.')
       }

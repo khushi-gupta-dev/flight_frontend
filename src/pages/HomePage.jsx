@@ -35,16 +35,18 @@ function HomePage() {
   const [menuOpen, setMenuOpen] = useState(false)
   const [isSignedIn, setIsSignedIn] = useState(() => Boolean(sessionStorage.getItem('authToken') || localStorage.getItem('authToken')))
   const [isAdmin, setIsAdmin] = useState(false)
+  const [isCustomer, setIsCustomer] = useState(false)
 
   useEffect(() => {
     const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken')
     if (!token) return
     let active = true
     getCurrentUser(token)
-      .then((user) => { if (active) setIsAdmin(user.roles?.includes('admin') || false) })
+      .then((user) => { if (active) { setIsAdmin(user.roles?.includes('admin') || false); setIsCustomer(user.roles?.includes('customer') || false) } })
       .catch((error) => {
         if (!active) return
         setIsAdmin(false)
+        setIsCustomer(false)
         if ([400, 401, 403].includes(error.status)) {
           sessionStorage.removeItem('authToken')
           localStorage.removeItem('authToken')
@@ -77,6 +79,7 @@ function HomePage() {
     localStorage.removeItem('authToken')
     setIsSignedIn(false)
     setIsAdmin(false)
+    setIsCustomer(false)
   }
 
   const searchFlights = async (event) => {
@@ -164,6 +167,8 @@ function HomePage() {
           <nav className={menuOpen ? 'home-nav is-open' : 'home-nav'} aria-label="Main navigation">
             <a className="active" href="#home" onClick={() => setMenuOpen(false)}>Home</a>
             <a href="#why-skylink" onClick={() => setMenuOpen(false)}>Why SkyLink</a>
+            <Link to="/flight-search" onClick={() => setMenuOpen(false)}>Search flights</Link>
+            {isCustomer && !isAdmin && <Link to="/assistant" onClick={() => setMenuOpen(false)}>AI assistant</Link>}
             <a href="#explore" onClick={() => setMenuOpen(false)}>Explore</a>
             {isSignedIn && <Link to="/my-bookings" onClick={() => setMenuOpen(false)}>My bookings</Link>}
             {isSignedIn && <Link to="/profile" onClick={() => setMenuOpen(false)}>Profile</Link>}
@@ -176,7 +181,7 @@ function HomePage() {
           <p className="home-kicker"><span /> YOUR NEXT CHAPTER STARTS HERE</p>
           <h1>The world is<br />closer than <em>ever.</em></h1>
           <p className="home-lede">Find a flight that takes you somewhere wonderful.<br className="desktop-break" /> Simple search, thoughtful journeys, all in one place.</p>
-          <a className="home-explore-link" href="#flight-search">Find your flight <span><ArrowDown size={16} /></span></a>
+          <Link className="home-explore-link" to="/flight-search">Find your flight <span><ArrowDown size={16} /></span></Link>
         </div>
 
       </section>
