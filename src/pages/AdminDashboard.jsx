@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AlertTriangle, ArrowUpRight, Building2, Check, ChevronRight, Clock3, ClipboardList, LayoutDashboard, LogOut, MapPin, Menu, Plane, Plus, Search, ShieldCheck, Users, UserRound, X } from 'lucide-react'
 import { getCurrentUser } from '../services/auth'
-import { cancelDisruption, createAirplane, createAirport, createCity, createDisruption, createFlight, getAdminBookings, getAdminResources, getDisruptions, retryDisruption } from '../services/admin'
+import { assignRecoveryAlternative, cancelDisruption, createAirplane, createAirport, createCity, createDisruption, createFlight, getAdminBookings, getAdminResources, getDisruptions, getRecoveryOperations, getRecoverySummary, overrideRecoveryOperation, retryDisruption, retryRecoveryOperation } from '../services/admin'
 import './AdminDashboard.css'
 import './AdminBookings.css'
 import './AdminProfileLink.css'
@@ -67,6 +67,10 @@ function AdminWorkspace({ profile, token, onLogout }) {
   const [disruptions, setDisruptions] = useState([])
   const [disruptionsLoading, setDisruptionsLoading] = useState(false)
   const [disruptionsError, setDisruptionsError] = useState('')
+  const [recoveryOperations, setRecoveryOperations] = useState([])
+  const [recoverySummary, setRecoverySummary] = useState(null)
+  const [recoveryOperationsLoading, setRecoveryOperationsLoading] = useState(false)
+  const [recoveryOperationsError, setRecoveryOperationsError] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [dialog, setDialog] = useState('')
@@ -119,11 +123,28 @@ function AdminWorkspace({ profile, token, onLogout }) {
 
   useEffect(() => { if (activeTab === 'disruptions') refreshDisruptions() }, [activeTab, token]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const refreshRecoveryOperations = async (query = '') => {
+    setRecoveryOperationsError('')
+    setRecoveryOperationsLoading(true)
+    try {
+      const [rows, summary] = await Promise.all([getRecoveryOperations(token, query), getRecoverySummary(token, query)])
+      setRecoveryOperations(Array.isArray(rows) ? rows : [])
+      setRecoverySummary(summary)
+    } catch (error) {
+      setRecoveryOperationsError(error.message || 'Could not load recovery operations.')
+    } finally {
+      setRecoveryOperationsLoading(false)
+    }
+  }
+
+  useEffect(() => { if (activeTab === 'recovery') refreshRecoveryOperations() }, [activeTab, token]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const availableSeats = useMemo(() => resources.flights.reduce((sum, flight) => sum + Number(flight.totalSeats || 0), 0), [resources.flights])
   const navItems = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'bookings', label: 'Bookings', icon: ClipboardList },
     { id: 'disruptions', label: 'Disruptions', icon: AlertTriangle },
+    { id: 'recovery', label: 'Recovery ops', icon: ShieldCheck },
     { id: 'flights', label: 'Flights', icon: Plane },
     { id: 'airports', label: 'Airports', icon: MapPin },
     { id: 'fleet', label: 'Fleet', icon: Building2 },
@@ -169,6 +190,7 @@ function AdminWorkspace({ profile, token, onLogout }) {
             {activeTab === 'fleet' && <FleetPanel airplanes={resources.airplanes} onCreate={openCreate} />}
             {activeTab === 'bookings' && <BookingsPanel bookings={bookings} loading={bookingsLoading} error={bookingsError} onRefresh={refreshBookings} />}
             {activeTab === 'disruptions' && <DisruptionsPanel flights={resources.flights} disruptions={disruptions} loading={disruptionsLoading} error={disruptionsError} token={token} onRefresh={refreshDisruptions} onCreated={handleCreated} />}
+            {activeTab === 'recovery' && <RecoveryOperationsPanel flights={resources.flights} cases={recoveryOperations} summary={recoverySummary} loading={recoveryOperationsLoading} error={recoveryOperationsError} token={token} onRefresh={refreshRecoveryOperations} />}
           </>}
         </div>
       </section>
@@ -260,6 +282,69 @@ function DisruptionsPanel({ flights, disruptions, loading, error, token, onRefre
       </section>
     </div>
   </div>
+}
+
+function RecoveryOperationsPanel({ flights, cases, summary, loading, error, token, onRefresh }) {
+  const [filters, setFilters] = useState({ status: '', disruptionId: '', from: '', to: '' })
+  const [working, setWorking] = useState('')
+  const [action, setAction] = useState(null)
+  const [actionError, setActionError] = useState('')
+
+  const applyFilters = (event) => {
+    event.preventDefault()
+    const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value)).toString()
+    onRefresh(query)
+  }
+  const run = async (operation, id, data = {}) => {
+    setWorking(`${operation.name}-${id}`)
+    setActionError('')
+    try {
+      await operation(token, id, data)
+      setAction(null)
+      const query = new URLSearchParams(Object.entries(filters).filter(([, value]) => value)).toString()
+      await onRefresh(query)
+    } catch (actionRequestError) {
+      setActionError(actionRequestError.message)
+    } finally {
+      setWorking('')
+    }
+  }
+  const statCards = [
+    ['Affected passengers', summary?.affectedPassengers || 0, 'rose'],
+    ['Recovery cases', summary?.recoveryCases || 0, 'slate'],
+    ['Awaiting approval', summary?.awaitingApproval || 0, 'gold'],
+    ['Successful rebookings', summary?.successfulRebookings || 0, 'green'],
+    ['Failed rebookings', summary?.failedRebookings || 0, 'rose'],
+  ]
+  return <div className="recovery-ops-workspace">
+    <div className="recovery-ops-stats">{statCards.map(([label, value, tone]) => <article className={`recovery-ops-stat ${tone}`} key={label}><small>{label}</small><strong>{Number(value).toLocaleString()}</strong></article>)}</div>
+    <section className="admin-panel recovery-ops-filter"><form onSubmit={applyFilters}><label>Status<select value={filters.status} onChange={(event) => setFilters({ ...filters, status: event.target.value })}><option value="">All statuses</option><option value="awaiting_approval">Awaiting approval</option><option value="rebooking">Rebooking</option><option value="completed">Completed</option><option value="failed">Failed</option><option value="declined">Declined</option></select></label><label>Disruption ID<input type="number" min="1" value={filters.disruptionId} onChange={(event) => setFilters({ ...filters, disruptionId: event.target.value })} placeholder="All" /></label><label>From<input type="date" value={filters.from} onChange={(event) => setFilters({ ...filters, from: event.target.value })} /></label><label>To<input type="date" value={filters.to} onChange={(event) => setFilters({ ...filters, to: event.target.value })} /></label><button className="admin-create-button small" type="submit"><Search size={14} /> Filter</button><button className="recovery-ops-clear" type="button" onClick={() => { setFilters({ status: '', disruptionId: '', from: '', to: '' }); onRefresh() }}>Clear</button></form></section>
+    {error && <div className="admin-error"><span>{error}</span><button onClick={() => onRefresh()}>Retry</button></div>}
+    {actionError && <div className="admin-error"><span>{actionError}</span><button onClick={() => setActionError('')}>Dismiss</button></div>}
+    <section className="admin-panel recovery-ops-table"><div className="admin-panel-head"><div><h2>Recovery operations <span className="admin-count">{cases.length}</span></h2><p>Monitor passenger impact and intervene without bypassing the rebooking saga.</p></div><button onClick={() => onRefresh()}>Refresh</button></div>{loading ? <div className="admin-loading"><span className="admin-loader" />Loading recovery operations…</div> : !cases.length ? <div className="admin-empty"><span><ShieldCheck size={21} /></span><strong>No recovery cases match these filters</strong><p>Cases will appear after a disruption reaches a paid booking.</p></div> : <div className="admin-table-wrap"><table className="admin-table"><thead><tr><th>Case</th><th>Booking</th><th>Passenger</th><th>Status</th><th>Alternatives</th><th>Created</th><th>Actions</th></tr></thead><tbody>{    cases.map((recoveryCase) => <RecoveryOperationRow key={recoveryCase.id} recoveryCase={recoveryCase} working={working} onAction={setAction} />)}</tbody></table></div>}</section>
+    {action && <RecoveryOperationDialog action={action} flights={flights} working={working} error={actionError} onClose={() => { setAction(null); setActionError('') }} onSubmit={(operation, data) => run(operation, action.id, data)} />}
+  </div>
+}
+
+function RecoveryOperationRow({ recoveryCase, working, onAction }) {
+  const passenger = recoveryCase.booking?.passengerDetails?.[0] || {}
+  const selected = recoveryCase.alternatives?.find((alternative) => alternative.id === recoveryCase.selectedAlternativeId)
+  const details = { id: recoveryCase.id, alternatives: recoveryCase.alternatives || [], audit: recoveryCase.audit || [] }
+  return <tr className="recovery-ops-row"><td><strong>#{recoveryCase.id}</strong><small>Disruption #{recoveryCase.disruptionId}</small></td><td>#{recoveryCase.bookingId}<small>{recoveryCase.booking?.noOfSeats || 0} passenger(s)</small></td><td>{passenger.fullName || `User ${recoveryCase.userId}`}<small>{passenger.email || 'Email unavailable'}</small></td><td><span className={`recovery-ops-status ${recoveryCase.status}`}>{recoveryCase.status.replaceAll('_', ' ')}</span></td><td>{recoveryCase.alternatives?.length || 0}{selected && <small>Selected #{selected.replacementFlightId}</small>}</td><td>{formatDate(recoveryCase.createdAt)}</td><td><div className="recovery-ops-actions">{recoveryCase.status === 'failed' && <button disabled={working === `retryRecoveryOperation-${recoveryCase.id}`} onClick={() => onAction({ ...details, type: 'retry' })}>Retry</button>}{['awaiting_alternatives', 'failed', 'awaiting_approval'].includes(recoveryCase.status) && <button onClick={() => onAction({ ...details, type: 'assign' })}>Assign</button>}<button onClick={() => onAction({ ...details, type: 'timeline' })}>Audit</button>{['awaiting_approval', 'failed', 'rebooking'].includes(recoveryCase.status) && <button onClick={() => onAction({ ...details, type: 'override' })}>Override</button>}</div></td></tr>
+}
+
+function RecoveryOperationDialog({ action, flights, working, error, onClose, onSubmit }) {
+  const [flightId, setFlightId] = useState('')
+  const [alternativeId, setAlternativeId] = useState('')
+  const [reason, setReason] = useState('')
+  const submit = (event) => {
+    event.preventDefault()
+    if (action.type === 'retry') return onSubmit(retryRecoveryOperation)
+    if (action.type === 'assign') return onSubmit(assignRecoveryAlternative, { flightId: Number(flightId), reason })
+    if (action.type === 'override') return onSubmit(overrideRecoveryOperation, { action: alternativeId ? 'approve_rebooking' : 'close', alternativeId: Number(alternativeId), reason })
+  }
+  if (action.type === 'timeline') return <div className="admin-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="admin-modal recovery-audit-dialog"><div className="admin-modal-head"><div><p className="admin-eyebrow">CASE #{action.id}</p><h2>Audit timeline</h2></div><button onClick={onClose}><X size={19} /></button></div><div className="recovery-admin-timeline">{(action.audit || []).map((event) => <div key={event.id}><i /><span><strong>{event.eventType.replaceAll('_', ' ')}</strong><small>{formatDate(event.createdAt)} · {event.actorType}</small></span></div>)}</div></section></div>
+  return <div className="admin-modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}><section className="admin-modal"><div className="admin-modal-head"><div><p className="admin-eyebrow">RECOVERY OPERATIONS</p><h2>{action.type === 'retry' ? 'Retry rebooking' : action.type === 'assign' ? 'Assign alternative' : 'Operational override'}</h2></div><button onClick={onClose}><X size={19} /></button></div><form className="admin-form" onSubmit={submit}>{action.type === 'assign' && <label>Replacement flight<select value={flightId} onChange={(event) => setFlightId(event.target.value)} required><option value="" disabled>Select a future flight</option>{flights.filter((flight) => Number(flight.totalSeats) > 0).map((flight) => <option key={flight.id} value={flight.id}>{flight.flightNumber} · {flight.departureAirportId} → {flight.arrivalAirportId} · {flight.totalSeats} seats</option>)}</select></label>}{action.type === 'override' && <label>Override action<select value={alternativeId ? 'approve' : 'close'} onChange={(event) => setAlternativeId(event.target.value === 'approve' ? String(action.alternatives?.[0]?.id || '') : '')}><option value="close">Close case</option><option value="approve" disabled={!action.alternatives?.length}>Approve first available alternative</option></select></label>}{action.type === 'override' && alternativeId && <label>Alternative ID<input type="number" min="1" value={alternativeId} onChange={(event) => setAlternativeId(event.target.value)} required /></label>}{action.type !== 'retry' && <label>Reason<textarea rows="3" value={reason} onChange={(event) => setReason(event.target.value)} minLength="5" placeholder="Document the operational decision..." required /></label>}{error && <p className="admin-form-error">{error}</p>}<div className="admin-form-actions"><button type="button" className="admin-cancel" onClick={onClose}>Cancel</button><button className="admin-create-button" disabled={Boolean(working)}>{working ? 'Working…' : 'Confirm action'}</button></div></form></section></div>
 }
 
 function BookingsPanel({ bookings, loading, error, onRefresh }) {

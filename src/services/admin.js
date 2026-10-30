@@ -1,6 +1,7 @@
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '')
 const FLIGHT_API = `${API_BASE_URL}/flightsService/api/v1`
 const BOOKING_API = `${API_BASE_URL}/bookingService/api/v1/bookings`
+const RECOVERY_OPERATIONS_API = `${API_BASE_URL}/bookingService/api/v1/recovery-operations`
 
 async function adminRequest(path, token, options = {}, baseUrl = FLIGHT_API) {
   let response
@@ -90,3 +91,9 @@ export const retryDisruption = (token, id) => adminRequest(`/disruptions/${id}/r
 export const cancelDisruption = (token, id) => adminRequest(`/disruptions/${id}/cancel`, token, {
   method: 'POST',
 })
+
+export const getRecoveryOperations = (token, query = '') => adminRequest(query ? `?${query}` : '', token, {}, RECOVERY_OPERATIONS_API)
+export const getRecoverySummary = (token, query = '') => adminRequest(`/summary${query ? `?${query}` : ''}`, token, {}, RECOVERY_OPERATIONS_API)
+export const retryRecoveryOperation = (token, id) => adminRequest(`/${id}/retry`, token, { method: 'POST' }, RECOVERY_OPERATIONS_API)
+export const assignRecoveryAlternative = (token, id, data) => adminRequest(`/${id}/assign-alternative`, token, { method: 'POST', body: JSON.stringify(data) }, RECOVERY_OPERATIONS_API)
+export const overrideRecoveryOperation = (token, id, data) => adminRequest(`/${id}/override`, token, { method: 'POST', body: JSON.stringify(data) }, RECOVERY_OPERATIONS_API)
