@@ -9,6 +9,31 @@ function formatDate(value) {
   return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 }
 
+function formatMoney(value) {
+  if (!Number.isFinite(Number(value))) return 'Not available'
+  return `₹${Number(value).toLocaleString()}`
+}
+
+function formatDifference(original, replacement) {
+  const difference = Number(replacement) - Number(original)
+  if (!Number.isFinite(difference)) return 'Price difference unavailable'
+  if (difference === 0) return 'No price difference'
+  return `${difference > 0 ? '+' : '-'}${formatMoney(Math.abs(difference))}`
+}
+
+function formatRoute(flight) {
+  if (!flight) return 'Route unavailable'
+  return `${flight.departureAirportId} → ${flight.arrivalAirportId}`
+}
+
+function formatDelay(original, replacement) {
+  if (!original || !replacement) return 'Timing difference unavailable'
+  const minutes = Math.round((new Date(replacement.arrivalTime) - new Date(original.arrivalTime)) / 60000)
+  if (!Number.isFinite(minutes)) return 'Timing difference unavailable'
+  if (minutes === 0) return 'Same arrival time'
+  return `${minutes > 0 ? '+' : ''}${minutes} min arrival difference`
+}
+
 export default function RecoveryPage() {
   const navigate = useNavigate()
   const token = sessionStorage.getItem('authToken') || localStorage.getItem('authToken') || ''
@@ -60,12 +85,19 @@ export default function RecoveryPage() {
 }
 
 function RecoveryCard({ recoveryCase, working, onApprove, onDecline, onRetry }) {
-  const alternatives = recoveryCase.alternatives || []
+  const details = recoveryCase.recoveryDetails || {}
+  const alternatives = details.alternatives || recoveryCase.alternatives || []
   const audit = recoveryCase.audit || []
+  const originalFlight = details.originalFlight
+  const currentFlight = details.currentFlight
+  const disruption = details.disruption
+  const reference = details.currentBookingReference || details.previousBookingReference || `BOOK-${recoveryCase.bookingId}`
   return <article className="recovery-case">
     <div className="recovery-case-head"><div className="recovery-case-icon"><AlertTriangle size={18} /></div><div><p className="recovery-kicker">RECOVERY CASE #{recoveryCase.id}</p><h2>Choose your next flight</h2></div><span className={`recovery-status recovery-${recoveryCase.status}`}>{recoveryCase.status.replaceAll('_', ' ')}</span></div>
-    <div className="recovery-case-note"><Clock3 size={15} /><span>Your original booking remains unchanged while you decide.</span></div>
-    {alternatives.length ? <div className="recovery-options">{alternatives.map((alternative) => <div className={`recovery-option ${recoveryCase.selectedAlternativeId === alternative.id ? 'selected' : ''}`} key={alternative.id}><div className="recovery-option-top"><span className="recovery-flight-icon"><Plane size={15} /></span><div><strong>Flight option #{alternative.replacementFlightId}</strong><small>Recommendation score {Number(alternative.score).toFixed(1)}</small></div>{alternative.status === 'selected' && <Check className="recovery-selected-icon" size={17} />}</div><div className="recovery-option-meta"><span><small>Departure</small><strong>{formatDate(alternative.departureTime)}</strong></span><span><small>Arrival</small><strong>{formatDate(alternative.arrivalTime)}</strong></span><span><small>Fare</small><strong>₹{Number(alternative.price).toLocaleString()}</strong></span></div><p className="recovery-explanation">{alternative.explanation}</p>{recoveryCase.status === 'awaiting_approval' && <button className="recovery-approve" disabled={working} onClick={() => onApprove(alternative.id)}>{working ? 'Saving choice…' : 'Choose this flight'} <ArrowRight size={14} /></button>}</div>)}</div> : <div className="recovery-no-options"><strong>We are still looking for a suitable alternative.</strong><span>Try refreshing shortly.</span></div>}
+    <div className="recovery-case-note"><Clock3 size={15} /><span>Your original booking remains unchanged while you decide.</span><strong>{reference}</strong></div>
+    <div className="recovery-details-grid"><div><small>Original flight</small><strong>{originalFlight?.flightNumber || `Flight #${recoveryCase.booking?.flightId || '—'}`}</strong><span>{formatRoute(originalFlight)}</span></div><div><small>Current booking</small><strong>{currentFlight?.flightNumber || 'Not rebooked'}</strong><span>{currentFlight ? formatRoute(currentFlight) : 'Awaiting your decision'}</span></div><div><small>Passengers</small><strong>{details.passengerCount || recoveryCase.booking?.noOfSeats || 0}</strong><span>{details.passengerCount === 1 ? 'traveller' : 'travellers'}</span></div><div><small>Approval deadline</small><strong>{details.approvalDeadline ? formatDate(details.approvalDeadline) : 'No deadline set'}</strong><span>{details.approvalDeadline ? 'Please decide before this time' : 'Contact support if urgent'}</span></div></div>
+    <div className="recovery-impact-grid"><div><small>Disruption reason</small><strong>{disruption?.reason || 'Operational disruption'}</strong><span>{disruption?.type ? `${disruption.type.replaceAll('_', ' ')} · ${disruption.severity || 'standard'} severity` : 'Details unavailable'}</span></div><div><small>Booking references</small><strong>Previous: {details.previousBookingReference || reference}</strong><span>Current: {details.currentBookingReference || reference} · same booking record</span></div><div><small>Compensation</small><strong>{details.compensation?.amount ? formatMoney(details.compensation.amount) : 'Not configured'}</strong><span>{details.compensation?.description || 'No compensation has been assigned to this recovery case.'}</span></div></div>
+    {alternatives.length ? <div className="recovery-options">{alternatives.map((alternative) => <div className={`recovery-option ${recoveryCase.selectedAlternativeId === alternative.id ? 'selected' : ''}`} key={alternative.id}><div className="recovery-option-top"><span className="recovery-flight-icon"><Plane size={15} /></span><div><strong>{alternative.flightNumber || `Flight #${alternative.replacementFlightId}`}</strong><small>{alternative.route || 'Route unavailable'} · score {Number(alternative.score).toFixed(1)}</small></div>{alternative.status === 'selected' && <Check className="recovery-selected-icon" size={17} />}</div><div className="recovery-option-meta"><span><small>Departure</small><strong>{formatDate(alternative.departureTime)}</strong></span><span><small>Arrival</small><strong>{formatDate(alternative.arrivalTime)}</strong></span><span><small>Fare</small><strong>{formatMoney(alternative.price)}</strong></span></div><p className="recovery-option-difference">{formatDelay(originalFlight, alternative)} · {formatDifference(originalFlight?.price, alternative.price)}</p><p className="recovery-explanation">{alternative.explanation}</p>{recoveryCase.status === 'awaiting_approval' && <button className="recovery-approve" disabled={working} onClick={() => onApprove(alternative.id)}>{working ? 'Saving choice…' : 'Choose this flight'} <ArrowRight size={14} /></button>}</div>)}</div> : <div className="recovery-no-options"><strong>We are still looking for a suitable alternative.</strong><span>Try refreshing shortly.</span></div>}
     {recoveryCase.status === 'awaiting_approval' && <button className="recovery-decline" disabled={working} onClick={onDecline}><X size={14} /> Decline all options</button>}
     {recoveryCase.status === 'rebooking' && <p className="recovery-progress"><span className="recovery-loader small" /> Your choice is being secured.</p>}
     {recoveryCase.status === 'failed' && <div className="recovery-failure"><strong>Recovery paused safely.</strong><span>{recoveryCase.rebookingAttempt?.errorMessage || 'The last step needs another attempt.'}</span><button className="recovery-retry" disabled={working} onClick={onRetry}><RefreshCw size={13} /> Retry rebooking</button></div>}
