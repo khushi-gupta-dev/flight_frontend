@@ -29,6 +29,10 @@ experiences.
   compensation status, alternatives, progress, retries, and audit events.
 - Admin recovery operations provide KPI cards, filters, retries, manual
   assignment, audit timelines, and reason-required overrides.
+- The admin overview provides live booking-status bars, inventory-health ring
+  statistics, disruption-status bars, and navigation from each chart to the
+  relevant operational workspace. These visualizations use existing Gateway
+  data and require no separate analytics service.
 - The assistant is customer-only and cannot change bookings.
 
 ## API configuration

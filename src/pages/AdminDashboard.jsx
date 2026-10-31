@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { AlertTriangle, ArrowUpRight, Building2, Check, ChevronRight, Clock3, ClipboardList, LayoutDashboard, LogOut, MapPin, Menu, Plane, Plus, Search, ShieldCheck, Users, UserRound, X } from 'lucide-react'
+import { AlertTriangle, ArrowUpRight, BarChart3, Building2, Check, ChevronRight, Clock3, ClipboardList, LayoutDashboard, LogOut, MapPin, Menu, Plane, Plus, Search, ShieldCheck, Users, UserRound, X } from 'lucide-react'
 import { getCurrentUser } from '../services/auth'
 import { assignRecoveryAlternative, cancelDisruption, createAirplane, createAirport, createCity, createDisruption, createFlight, getAdminBookings, getAdminResources, getDisruptions, getRecoveryOperations, getRecoverySummary, overrideRecoveryOperation, retryDisruption, retryRecoveryOperation } from '../services/admin'
 import './AdminDashboard.css'
@@ -106,7 +106,7 @@ function AdminWorkspace({ profile, token, onLogout }) {
     }
   }
 
-  useEffect(() => { if (activeTab === 'bookings' && !loading) refreshBookings() }, [activeTab, token, resources.flights, loading]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (['bookings', 'overview'].includes(activeTab) && !loading) refreshBookings() }, [activeTab, token, resources.flights, loading]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const refreshDisruptions = async () => {
     setDisruptionsError('')
@@ -121,7 +121,7 @@ function AdminWorkspace({ profile, token, onLogout }) {
     }
   }
 
-  useEffect(() => { if (activeTab === 'disruptions') refreshDisruptions() }, [activeTab, token]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (['disruptions', 'overview'].includes(activeTab)) refreshDisruptions() }, [activeTab, token]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const refreshRecoveryOperations = async (query = '') => {
     setRecoveryOperationsError('')
@@ -184,7 +184,7 @@ function AdminWorkspace({ profile, token, onLogout }) {
           {notice && <div className="admin-notice" role="status"><Check size={16} />{notice}</div>}
           {loadError && <div className="admin-error" role="alert"><span>{loadError}</span><button onClick={refreshResources}>Retry</button></div>}
           {loading ? <div className="admin-loading"><span className="admin-loader" />Loading flight operations…</div> : <>
-            {activeTab === 'overview' && <Overview resources={resources} availableSeats={availableSeats} onSelect={setActiveTab} />}
+            {activeTab === 'overview' && <Overview resources={resources} availableSeats={availableSeats} bookings={bookings} disruptions={disruptions} onSelect={setActiveTab} />}
             {activeTab === 'flights' && <FlightsPanel flights={resources.flights} onCreate={openCreate} />}
             {activeTab === 'airports' && <AirportsPanel airports={resources.airports} onCreate={openCreate} />}
             {activeTab === 'fleet' && <FleetPanel airplanes={resources.airplanes} onCreate={openCreate} />}
@@ -200,13 +200,16 @@ function AdminWorkspace({ profile, token, onLogout }) {
   )
 }
 
-function Overview({ resources, availableSeats, onSelect }) {
+function Overview({ resources, availableSeats, bookings, disruptions, onSelect }) {
   const stats = [
     { title: 'Scheduled flights', value: resources.flights.length.toLocaleString(), detail: 'Across all routes', icon: Plane, tone: 'rose', action: 'flights' },
     { title: 'Airport network', value: resources.airports.length.toLocaleString(), detail: 'Active airports', icon: MapPin, tone: 'gold', action: 'airports' },
     { title: 'Aircraft in fleet', value: resources.airplanes.length.toLocaleString(), detail: 'Registered aircraft', icon: Building2, tone: 'green', action: 'fleet' },
     { title: 'Seats available', value: availableSeats.toLocaleString(), detail: 'Current flight inventory', icon: Users, tone: 'slate', action: 'flights' },
   ]
+  const bookingStatuses = ['booked', 'initiated', 'pending', 'cancelled'].map((status) => ({ status, count: bookings.filter((booking) => booking.status === status).length }))
+  const disruptionStatuses = ['published', 'failed', 'created', 'cancelled'].map((status) => ({ status, count: disruptions.filter((disruption) => disruption.status === status).length }))
+  const availabilityRate = resources.flights.length ? Math.round((resources.flights.filter((flight) => Number(flight.totalSeats || 0) > 0).length / resources.flights.length) * 100) : 0
   const recentFlights = resources.flights
     .filter((flight) => Number.isFinite(Date.parse(flight.departureTime)) && Date.parse(flight.departureTime) > Date.now())
     .sort((a, b) => Date.parse(a.departureTime) - Date.parse(b.departureTime))
@@ -217,8 +220,24 @@ function Overview({ resources, availableSeats, onSelect }) {
       <section className="admin-panel admin-recent-panel"><div className="admin-panel-head"><div><h2>Upcoming flights</h2><p>Scheduled service in your network</p></div><button onClick={() => onSelect('flights')}>View all <ArrowUpRight size={14} /></button></div><FlightTable flights={recentFlights} compact /></section>
       <section className="admin-panel admin-quick-panel"><div className="admin-panel-head"><div><h2>Quick actions</h2><p>Keep your network up to date</p></div></div><button onClick={() => onSelect('flights')}><span className="quick-action-icon rose"><Plane size={17} /></span><span><strong>Manage flights</strong><small>Review routes and schedules</small></span><ChevronRight size={16} /></button><button onClick={() => onSelect('bookings')}><span className="quick-action-icon slate"><ClipboardList size={17} /></span><span><strong>Review bookings</strong><small>Check customer reservations and status</small></span><ChevronRight size={16} /></button><button onClick={() => onSelect('airports')}><span className="quick-action-icon gold"><MapPin size={17} /></span><span><strong>Airport network</strong><small>View connected airports</small></span><ChevronRight size={16} /></button><button onClick={() => onSelect('fleet')}><span className="quick-action-icon green"><Building2 size={17} /></span><span><strong>Manage fleet</strong><small>Review aircraft capacity</small></span><ChevronRight size={16} /></button></section>
     </div>
+    <div className="admin-analytics-grid">
+      <section className="admin-panel admin-chart-panel"><div className="admin-panel-head"><div><h2><BarChart3 size={15} /> Booking status</h2><p>{bookings.length.toLocaleString()} total reservations</p></div><button onClick={() => onSelect('bookings')}>Open bookings <ArrowUpRight size={14} /></button></div><StatusBars items={bookingStatuses} /></section>
+      <section className="admin-panel admin-chart-panel"><div className="admin-panel-head"><div><h2>Inventory health</h2><p>Flights with remaining seat inventory</p></div><strong className="admin-chart-value">{availabilityRate}%</strong></div><RingChart value={availabilityRate} /><div className="admin-chart-legend"><span><i className="rose-dot" />Available seats <strong>{availableSeats.toLocaleString()}</strong></span><span><i className="muted-dot" />Flights tracked <strong>{resources.flights.length}</strong></span></div></section>
+      <section className="admin-panel admin-chart-panel"><div className="admin-panel-head"><div><h2>Disruption activity</h2><p>Operational event status</p></div><button onClick={() => onSelect('disruptions')}>Review events <ArrowUpRight size={14} /></button></div><StatusBars items={disruptionStatuses} /></section>
+    </div>
     <div className="admin-info-strip"><ShieldCheck size={17} /><p><strong>Protected administrator workspace</strong><span>All flight, airport, and fleet changes are verified by the API Gateway.</span></p><span className="admin-info-badge">ADMIN ACCESS</span></div>
   </>
+}
+
+function StatusBars({ items }) {
+  const max = Math.max(...items.map((item) => item.count), 1)
+  return <div className="admin-status-bars">{items.map((item) => <div className="admin-status-bar" key={item.status}><div><span>{item.status.replaceAll('_', ' ')}</span><strong>{item.count}</strong></div><span className={`admin-bar-track ${item.status}`}><i style={{ width: `${Math.max(4, (item.count / max) * 100)}%` }} /></span></div>)}</div>
+}
+
+function RingChart({ value }) {
+  const radius = 43
+  const circumference = 2 * Math.PI * radius
+  return <div className="admin-ring-chart"><svg viewBox="0 0 110 110" role="img" aria-label={`${value}% of flights have available inventory`}><circle className="admin-ring-base" cx="55" cy="55" r={radius} /><circle className="admin-ring-progress" cx="55" cy="55" r={radius} strokeDasharray={circumference} strokeDashoffset={circumference - (circumference * value) / 100} /></svg><strong>{value}%</strong></div>
 }
 
 function FlightsPanel({ flights, onCreate }) {
