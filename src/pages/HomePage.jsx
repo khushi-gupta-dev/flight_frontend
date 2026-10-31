@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowDown, ArrowRight, ArrowUpRight, Compass, LogOut, Menu, Plane, ShieldCheck, Sparkles, X } from 'lucide-react'
+import { ArrowDown, ArrowRight, ArrowUpRight, Compass, Globe2, LogOut, Menu, Plane, ShieldCheck, Sparkles, X } from 'lucide-react'
 import './HomePage.css'
 import { getCurrentUser } from '../services/auth'
 
@@ -58,15 +58,16 @@ function HomePage() {
         </header>
 
         <div className="home-hero-copy">
-          <p className="home-kicker"><span /> YOUR NEXT CHAPTER STARTS HERE</p>
-          <h1>The world is<br />closer than <em>ever.</em></h1>
-          <p className="home-lede">Find a flight that takes you somewhere wonderful.<br className="desktop-break" /> Compare routes, plan with confidence, and keep every part of your journey in one place.</p>
-          <Link className="home-explore-link" to="/flight-search">Find your flight <span><ArrowDown size={16} /></span></Link>
+        <p className="home-kicker home-reveal home-delay-1"><span /> YOUR NEXT CHAPTER STARTS HERE</p>
+        <h1 className="home-reveal home-delay-2">The world is<br />closer than <em>ever.</em></h1>
+        <p className="home-lede home-reveal home-delay-3">Find a flight that takes you somewhere wonderful.<br className="desktop-break" /> Compare routes, plan with confidence, and keep every part of your journey in one place.</p>
+        <Link className="home-explore-link home-reveal home-delay-4" to="/flight-search">Find your flight <span><ArrowDown size={16} /></span></Link>
         </div>
+        <div className="home-hero-orbit home-float" aria-hidden="true"><span className="home-orbit-ring home-orbit-ring-one" /><span className="home-orbit-ring home-orbit-ring-two" /><span className="home-orbit-dot home-orbit-dot-one" /><span className="home-orbit-dot home-orbit-dot-two" /><div className="home-route-card"><div><span className="home-route-icon"><Globe2 size={17} /></span><span><small>YOUR NEXT ROUTE</small><strong>Somewhere new</strong></span></div><span className="home-route-arrow"><ArrowUpRight size={16} /></span><p><span>SKYLINK</span><span>READY WHEN YOU ARE</span></p></div></div>
 
       </section>
 
-      <section className="home-search-cta" id="flight-search">
+      <section className="home-search-cta home-section-reveal" id="flight-search">
         <div className="home-search-cta-copy">
           <p className="section-kicker">THE JOURNEY BEGINS</p>
           <h2>Make your next trip<br /><em>easy to plan.</em></h2>
@@ -75,16 +76,16 @@ function HomePage() {
         <Link className="home-search-cta-button" to="/flight-search">Open flight search <ArrowUpRight size={18} /></Link>
       </section>
 
-      <section className="why-section" id="why-skylink">
+      <section className="why-section home-section-reveal" id="why-skylink">
         <div className="why-copy"><p className="section-kicker">A BETTER WAY TO FLY</p><h2>More journey.<br /><em>Less hassle.</em></h2><p>SkyLink brings flight discovery and booking into one clear experience. Search by route and date, review the details that matter, and move from planning to confirmation without unnecessary steps.</p><Link to="/signup" className="text-link">Start exploring <ArrowRight size={16} /></Link></div>
         <div className="benefit-grid">
-          <article className="benefit-card benefit-card-tint"><span className="benefit-icon"><Compass size={20} /></span><span className="benefit-number">01</span><h3>Find your way</h3><p>Search routes by airport, date and traveller count so you can focus on the journey ahead.</p></article>
-          <article className="benefit-card"><span className="benefit-icon"><ShieldCheck size={20} /></span><span className="benefit-number">02</span><h3>Book with clarity</h3><p>See flight times, availability and prices together before you continue to secure booking.</p></article>
-          <article className="benefit-card"><span className="benefit-icon"><Sparkles size={20} /></span><span className="benefit-number">03</span><h3>Travel with confidence</h3><p>Keep your bookings organised and get helpful assistance whenever you need it.</p></article>
+          <article className="benefit-card benefit-card-tint home-card-reveal home-delay-1"><span className="benefit-icon"><Compass size={20} /></span><span className="benefit-number">01</span><h3>Find your way</h3><p>Search routes by airport, date and traveller count so you can focus on the journey ahead.</p></article>
+          <article className="benefit-card home-card-reveal home-delay-2"><span className="benefit-icon"><ShieldCheck size={20} /></span><span className="benefit-number">02</span><h3>Book with clarity</h3><p>See flight times, availability and prices together before you continue to secure booking.</p></article>
+          <article className="benefit-card home-card-reveal home-delay-3"><span className="benefit-icon"><Sparkles size={20} /></span><span className="benefit-number">03</span><h3>Travel with confidence</h3><p>Keep your bookings organised and get helpful assistance whenever you need it.</p></article>
         </div>
       </section>
 
-      <section className="explore-banner" id="explore"><div className="explore-copy"><p className="section-kicker">YOUR NEXT DESTINATION</p><h2>Make room for<br /><em>somewhere new.</em></h2><p>Take the first step toward your next great trip. Your journey starts with a flight search.</p></div><Link to="/flight-search" className="explore-cta">Explore flights <ArrowUpRight size={17} /></Link><span className="explore-sun" /><span className="banner-orbit orbit-one" /><span className="banner-orbit orbit-two" /></section>
+      <section className="explore-banner home-section-reveal" id="explore"><div className="explore-copy"><p className="section-kicker">YOUR NEXT DESTINATION</p><h2>Make room for<br /><em>somewhere new.</em></h2><p>Take the first step toward your next great trip. Your journey starts with a flight search.</p></div><Link to="/flight-search" className="explore-cta">Explore flights <ArrowUpRight size={17} /></Link><span className="explore-sun" /><span className="banner-orbit orbit-one" /><span className="banner-orbit orbit-two" /></section>
         <footer className="home-footer">
           <div className="footer-main">
             <div className="footer-identity">
